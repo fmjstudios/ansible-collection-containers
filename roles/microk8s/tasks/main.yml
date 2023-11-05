@@ -1,0 +1,49 @@
+---
+- name: Check if Docker binary exists.
+  ansible.builtin.stat:
+    path: "{{ docker_path }}"
+  register: docker_check
+
+- name: Install the MicroK8S snap package with 'Classic' confinement
+  community.general.snap:
+    name: microk8s
+    classic: true
+    state: present
+  register: microk8s_installed
+
+- name: Add the users to the MicroK8S group
+  ansible.builtin.user:
+    name: "{{ __microk8s__ }}"
+    state: present
+    groups: microk8s
+    append: true
+  loop: "{{ microk8s_privileged_users }}"
+  loop_control:
+    loop_var: __microk8s__
+  when: >
+    not docker_check.stat.exists
+    or microk8s_installed.rc != 0
+
+- name: Add 'kubectl' alias for MicroK8S
+  become: false
+  become_user: "{{ __microk8s__ }}"
+  ansible.builtin.lineinfile:
+    path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.bashrc"
+    regexp: "^alias kubectl="
+    line: 'alias kubectl="microk8s kubectl"'
+    state: present
+  loop: "{{ microk8s_privileged_users }}"
+  loop_control:
+    loop_var: __microk8s__
+
+- name: Add bash completions for 'kubectl'
+  become: false
+  become_user: "{{ __microk8s__ }}"
+  ansible.builtin.lineinfile:
+    path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.bashrc"
+    regexp: '^source \<\(kubectl'
+    line: "source <(kubectl completion bash)"
+    state: present
+  loop: "{{ microk8s_privileged_users }}"
+  loop_control:
+    loop_var: __microk8s__

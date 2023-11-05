@@ -1,0 +1,70 @@
+---
+- name: Install Docker Engine APT keys without apt-key
+  block:
+    - name: Create required directories with correct paths
+      ansible.builtin.file:
+        path: "/etc/apt/keyrings"
+        state: directory
+        mode: 0755
+
+    - name: Check if a Docker Engine GPG key is already installed
+      ansible.builtin.stat:
+        path: "{{ docker_ce_apt_key_path }}"
+      register: key
+
+    - name: Fetch Docker Engine APT key (if none are installed)
+      ansible.builtin.get_url:
+        url: "{{ docker_ce_apt_key_url }}"
+        dest: "{{ docker_ce_tmp_key_path }}"
+        mode: 0755
+      changed_when: false
+      when:
+        - key.stat.exists is defined
+        - not key.stat.exists
+
+    - name: Dearmor GPG keys (if none are installed)
+      ansible.builtin.shell: |
+        cat {{ docker_ce_tmp_key_path }} | gpg --dearmor -o {{ docker_ce_apt_key_path }}
+        sleep 5
+      register: gpg_cmd
+      ignore_errors: true
+      changed_when: false
+      failed_when:
+        - gpg_cmd.rc != 0
+      when:
+        - key.stat.exists is defined
+        - not key.stat.exists
+
+    - name: Configure the APT repository for Docker Engine
+      ansible.builtin.apt_repository:
+        repo: "{{ docker_ce_apt_repository_repo }}"
+        state: present
+
+- name: Update package caches
+  ansible.builtin.apt:
+    update_cache: "yes"
+
+- name: Install Docker Engine packages
+  ansible.builtin.apt:
+    name: "{{ docker_ce_packages }}"
+    state: present
+  notify:
+    - Restart docker service
+
+- name: Create Docker group
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add privileged users to docker group
+  ansible.builtin.user:
+    name: "{{ __docker__ }}"
+    groups: docker
+    append: "yes"
+  loop: "{{ docker_ce_users }}"
+  loop_control:
+    loop_var: __docker__
+  when:
+    - docker_ce_users is defined
+  notify:
+    - Restart docker service

@@ -1,0 +1,42 @@
+---
+__docker_ce_dependencies:
+  default: []
+  Debian:
+    - ca-certificates
+    - curl
+    - gnupg
+  Ubuntu:
+    - ca-certificates
+    - curl
+    - gnupg
+
+docker_ce_dependencies: >-
+  {{ __docker_ce_dependencies['ansible_os_family'] |
+  default(__docker_ce_dependencies['default']) }}
+
+__docker_ce_arch:
+  default: amd64
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: armhf
+  s390x: s390x
+  ppc64le: ppc64le
+
+docker_ce_apt_key_url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+docker_ce_tmp_key_path: "/tmp/docker.gpg.raw"
+docker_ce_apt_key_path: "/etc/apt/keyrings/docker.gpg"
+
+docker_ce_apt_repository_arch: "{{ __docker_ce_arch[ansible_architecture] | default(__docker_ce_arch['default']) }}"
+docker_ce_apt_repository_repo: >-
+  deb [arch={{ docker_ce_apt_repository_arch }}
+  signed-by={{ docker_ce_apt_key_path }}]
+  https://download.docker.com/linux/{{ ansible_distribution | lower }}
+  {{ ansible_distribution_release }}
+  stable
+
+docker_ce_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
